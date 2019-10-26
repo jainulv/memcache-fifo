@@ -1136,8 +1136,9 @@ static enum test_return test_binary_fifo_impl() {
         validate_response_header(&receive.response, PROTOCOL_BINARY_CMD_ADD,
                                     PROTOCOL_BINARY_RESPONSE_SUCCESS);
 
+        // make sure evictions happened in the fifo order
         int flag = 0;
-        for (int ii = 0; ii < i; ii++) {
+        for (int ii = 0; ii <= i; ii++) {
             char key2[20];
             snprintf(key2, sizeof(key2), "%s%d", "somekey", ii);
             size_t len = raw_command(send.bytes, sizeof(send.bytes), PROTOCOL_BINARY_CMD_GET,
@@ -1145,8 +1146,10 @@ static enum test_return test_binary_fifo_impl() {
             safe_send(send.bytes, len, false);
             safe_recv_packet(receive.bytes, sizeof(receive.bytes));
             if (receive.response.message.header.response.status != PROTOCOL_BINARY_RESPONSE_KEY_ENOENT && !flag) {
+                // evicted
                 flag = 1;
             } else if (flag) {
+                // nothing should be evicted from now on
                 validate_response_header(&receive.response, PROTOCOL_BINARY_CMD_GET,
                                     PROTOCOL_BINARY_RESPONSE_SUCCESS);
             }
