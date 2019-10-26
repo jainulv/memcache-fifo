@@ -1117,6 +1117,51 @@ static enum test_return test_binary_addq(void) {
     return test_binary_add_impl("test_binary_addq", PROTOCOL_BINARY_CMD_ADDQ);
 }
 
+static enum test_return test_binary_fifo_impl() {
+    uint64_t value = 0xdeadbeefdeadcafe;
+    union {
+        protocol_binary_request_no_extras request;
+        protocol_binary_response_no_extras response;
+        char bytes[1024];
+    } send, receive;
+
+    for (int i = 0; i < 100; i++) {
+        char key[20];
+        snprintf(key, sizeof(key), "%s%d", "somekey", i);
+        size_t len = storage_command(send.bytes, sizeof(send.bytes), PROTOCOL_BINARY_CMD_ADD, key,
+                                strlen(key), &value, sizeof(value),
+                                0, 0);
+        safe_send(send.bytes, len, false);
+        safe_recv_packet(receive.bytes, sizeof(receive.bytes));
+        validate_response_header(&receive.response, PROTOCOL_BINARY_CMD_ADD,
+                                    PROTOCOL_BINARY_RESPONSE_SUCCESS);
+
+        int flag = 0;
+        for (int ii = 0; ii < i; ii++) {
+            char key2[20];
+            snprintf(key2, sizeof(key2), "%s%d", "somekey", ii);
+            size_t len = raw_command(send.bytes, sizeof(send.bytes), PROTOCOL_BINARY_CMD_GET,
+                                        key2, strlen(key2), NULL, 0);
+            safe_send(send.bytes, len, false);
+            safe_recv_packet(receive.bytes, sizeof(receive.bytes));
+            if (receive.response.message.header.response.status != PROTOCOL_BINARY_RESPONSE_KEY_ENOENT && !flag) {
+                flag = 1;
+            } else if (flag) {
+                validate_response_header(&receive.response, PROTOCOL_BINARY_CMD_GET,
+                                    PROTOCOL_BINARY_RESPONSE_SUCCESS);
+            }
+        }
+    }
+
+    return TEST_PASS;
+}
+
+
+static enum test_return test_binary_fifo(void) {
+    return test_binary_fifo_impl();
+}
+
+
 static enum test_return test_binary_replace_impl(const char* key, uint8_t cmd) {
     uint64_t value = 0xdeadbeefdeadcafe;
     union {
@@ -1884,6 +1929,7 @@ struct testcase testcases[] = {
     { "binary_setq", test_binary_setq },
     { "binary_add", test_binary_add },
     { "binary_addq", test_binary_addq },
+    { "binary_fifo", test_binary_fifo },
     { "binary_replace", test_binary_replace },
     { "binary_replaceq", test_binary_replaceq },
     { "binary_delete", test_binary_delete },
